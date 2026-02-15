@@ -13,7 +13,7 @@ LONGITUDE = os.getenv("LONGITUDE")
 
 DB_HOST = os.getenv("MYSQL_HOST", "localhost")
 DB_USER = os.getenv("MYSQL_USER", "root")
-DB_PASSWORD = os.getenv("MYSQL_PASSWORD", "manikantasql234")
+DB_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 DB_NAME = os.getenv("MYSQL_DATABASE", "weather_db")
 DB_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 
