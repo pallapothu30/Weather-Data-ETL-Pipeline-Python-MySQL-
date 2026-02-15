@@ -24,7 +24,7 @@ weather_etl/
 pip install -r requirements.txt
 ```
 
-3. Update DB credentials in `config.py` or set environment variables:
+3. Set DB credentials with environment variables (recommended):
 
 - `MYSQL_HOST`
 - `MYSQL_USER`
@@ -32,18 +32,26 @@ pip install -r requirements.txt
 - `MYSQL_DATABASE`
 - `MYSQL_PORT`
 
+Example (PowerShell):
+
+```powershell
+$env:MYSQL_HOST="localhost"
+$env:MYSQL_USER="root"
+$env:MYSQL_PASSWORD="your_password"
+$env:MYSQL_DATABASE="weather_db"
+$env:MYSQL_PORT="3306"
+```
+
 4. Set location input (optional env vars):
 
 - `CITY_NAME` (default: `Vijayawada`)
-- `COUNTRY_CODE` (default: `IN`)
-- `LATITUDE` and `LONGITUDE` (optional manual override)
 
 ## MySQL Target
 
 - Database: `weather_db`
 - Table: `weather_data`
 - Duplicate handling: unique key on (`city_name`, `timestamp`) and `ON DUPLICATE KEY UPDATE`
-- Extra city metadata persisted per row: `country`, `country_code`, `admin1`, `timezone`, `latitude`, `longitude`
+- Extra city metadata persisted per row: `country`, `admin1`, `lat`, `longi`
 
 ## Run
 
