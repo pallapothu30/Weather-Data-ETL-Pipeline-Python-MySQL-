@@ -32,6 +32,7 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+    logging.getLogger("mysql").setLevel(logging.WARNING)
 
     try:
         args = _parse_args()
