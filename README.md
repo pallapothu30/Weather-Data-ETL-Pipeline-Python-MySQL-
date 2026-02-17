@@ -49,9 +49,12 @@ $env:MYSQL_PORT="3306"
 ## MySQL Target
 
 - Database: `weather_db`
-- Table: `weather_data`
-- Duplicate handling: unique key on (`city_name`, `timestamp`) and `ON DUPLICATE KEY UPDATE`
-- Extra city metadata persisted per row: `country`, `admin1`, `lat`, `longi`
+- Tables:
+  - `locations(location_id, city_name, country, admin1, lat, lon)`
+  - `weather_data(weather_id, location_id, timestamp, temp_celsius, temp_f, windspeed, data_collected_at)`
+- Duplicate handling:
+  - `uq_city_coords` on (`city_name`, `lat`, `lon`) in `locations`
+  - `uq_loc_time` on (`location_id`, `timestamp`) in `weather_data`
 
 ## Run
 
