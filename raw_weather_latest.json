@@ -1,0 +1,48 @@
+{
+  "requested_city": "gudivada",
+  "city_metadata": {
+    "city_name": "Gudiv\u0101da",
+    "country": "India",
+    "admin1": "Andhra Pradesh",
+    "timezone": "Asia/Kolkata",
+    "latitude": 16.43547,
+    "longitude": 80.99555,
+    "source": "geocoding_api"
+  },
+  "request": {
+    "url": "https://api.open-meteo.com/v1/forecast",
+    "params": {
+      "latitude": 16.43547,
+      "longitude": 80.99555,
+      "current_weather": "true"
+    }
+  },
+  "response": {
+    "latitude": 16.375,
+    "longitude": 81.0,
+    "generationtime_ms": 0.377655029296875,
+    "utc_offset_seconds": 0,
+    "timezone": "GMT",
+    "timezone_abbreviation": "GMT",
+    "elevation": 11.0,
+    "current_weather_units": {
+      "time": "iso8601",
+      "interval": "seconds",
+      "temperature": "\u00b0C",
+      "windspeed": "km/h",
+      "winddirection": "\u00b0",
+      "is_day": "",
+      "weathercode": "wmo code"
+    },
+    "current_weather": {
+      "time": "2026-02-17T15:45",
+      "interval": 900,
+      "temperature": 22.7,
+      "windspeed": 3.6,
+      "winddirection": 174,
+      "is_day": 0,
+      "weathercode": 0
+    }
+  },
+  "captured_at": "2026-02-17T15:54:04+00:00"
+}
