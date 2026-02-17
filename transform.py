@@ -52,12 +52,14 @@ def transform_weather_data(raw_data: Dict[str, Any], city_name: str) -> pd.DataF
     else:
         df["lat"] = 0.0
 
-    if "longi" in df.columns:
-        df["longi"] = df["longi"].fillna(0.0).astype(float)
+    if "lon" in df.columns:
+        df["lon"] = df["lon"].fillna(0.0).astype(float)
+    elif "longi" in df.columns:
+        df["lon"] = df["longi"].fillna(0.0).astype(float)
     elif "longitude" in df.columns:
-        df["longi"] = df["longitude"].fillna(0.0).astype(float)
+        df["lon"] = df["longitude"].fillna(0.0).astype(float)
     else:
-        df["longi"] = 0.0
+        df["lon"] = 0.0
     df["data_collected_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
 
     df = df[
@@ -66,7 +68,7 @@ def transform_weather_data(raw_data: Dict[str, Any], city_name: str) -> pd.DataF
             "country",
             "admin1",
             "lat",
-            "longi",
+            "lon",
             "timestamp",
             "temp_celsius",
             "temp_f",

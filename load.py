@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 
 import mysql.connector
@@ -28,7 +29,7 @@ def _connect(with_database: bool) -> MySQLConnection:
 
 
 def ensure_database_and_table() -> None:
-    """Create the target database and table if they do not exist."""
+    """Create normalized target tables if they do not exist."""
     try:
         conn = _connect(with_database=False)
         cursor = conn.cursor()
@@ -39,50 +40,83 @@ def ensure_database_and_table() -> None:
         logger.exception("Failed while creating/checking database")
         raise RuntimeError("MySQL database setup failed") from exc
 
-    create_table_sql = f"""
-    CREATE TABLE IF NOT EXISTS `{config.TABLE_NAME}` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        city_name VARCHAR(100) NOT NULL,
-        country VARCHAR(100),
-        admin1 VARCHAR(100),
-        lat DOUBLE,
-        longi DOUBLE,
-        `timestamp` DATETIME NOT NULL,
-        temp_celsius FLOAT,
-        temp_f FLOAT,
-        windspeed FLOAT,
-        data_collected_at DATETIME NOT NULL,
-        UNIQUE KEY uq_city_timestamp (city_name, `timestamp`)
-    )
-    """
-
-    required_columns = {
-        "country": "VARCHAR(100)",
-        "admin1": "VARCHAR(100)",
-        "lat": "DOUBLE",
-        "longi": "DOUBLE",
-        "temp_celsius": "FLOAT",
-        "temp_f": "FLOAT",
-    }
-
     try:
         conn = _connect(with_database=True)
         cursor = conn.cursor()
-        cursor.execute(create_table_sql)
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS `{config.LOCATION_TABLE}` (
+                location_id INT AUTO_INCREMENT PRIMARY KEY,
+                city_name VARCHAR(100) NOT NULL,
+                country VARCHAR(100),
+                admin1 VARCHAR(100),
+                lat DOUBLE,
+                lon DOUBLE,
+                UNIQUE KEY uq_city_coords (city_name, lat, lon)
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+            """,
+            (config.DB_NAME, config.WEATHER_TABLE),
+        )
+        weather_exists = cursor.fetchone()[0] > 0
+
+        if weather_exists:
+            cursor.execute(
+                """
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
+                """,
+                (config.DB_NAME, config.WEATHER_TABLE),
+            )
+            existing_weather_cols = {row[0] for row in cursor.fetchall()}
+            if "location_id" not in existing_weather_cols:
+                backup_name = f"{config.WEATHER_TABLE}_legacy_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                cursor.execute(
+                    f"RENAME TABLE `{config.WEATHER_TABLE}` TO `{backup_name}`"
+                )
+                logger.warning(
+                    "Renamed legacy denormalized table to `%s` before creating normalized schema",
+                    backup_name,
+                )
+
+        cursor.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS `{config.WEATHER_TABLE}` (
+                weather_id INT AUTO_INCREMENT PRIMARY KEY,
+                location_id INT NOT NULL,
+                `timestamp` DATETIME NOT NULL,
+                temp_celsius FLOAT,
+                temp_f FLOAT,
+                windspeed FLOAT,
+                data_collected_at DATETIME NOT NULL,
+                FOREIGN KEY (location_id)
+                    REFERENCES `{config.LOCATION_TABLE}`(location_id),
+                UNIQUE KEY uq_loc_time (location_id, `timestamp`)
+            )
+            """
+        )
         cursor.execute(
             """
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s
             """,
-            (config.DB_NAME, config.TABLE_NAME),
+            (config.DB_NAME, config.WEATHER_TABLE),
         )
-        existing_columns = {row[0] for row in cursor.fetchall()}
-        for column_name, column_type in required_columns.items():
-            if column_name not in existing_columns:
-                cursor.execute(
-                    f"ALTER TABLE `{config.TABLE_NAME}` ADD COLUMN `{column_name}` {column_type}"
-                )
+        existing_weather_cols = {row[0] for row in cursor.fetchall()}
+        if "location_id" not in existing_weather_cols:
+            raise RuntimeError(
+                f"Table `{config.WEATHER_TABLE}` exists but is not normalized. "
+                "Expected `location_id` column."
+            )
         conn.commit()
         cursor.close()
         conn.close()
@@ -92,34 +126,41 @@ def ensure_database_and_table() -> None:
 
 
 def load_weather_data(df) -> int:
-    """Insert transformed records into MySQL in an idempotent way."""
+    """Insert transformed records into normalized MySQL tables."""
     expected_columns = [
         "city_name",
+        "country",
+        "admin1",
+        "lat",
+        "lon",
         "timestamp",
         "temp_celsius",
         "temp_f",
         "windspeed",
         "data_collected_at",
-        "country",
-        "admin1",
-        "lat",
-        "longi",
     ]
+    if "lon" not in df.columns and "longi" in df.columns:
+        df = df.rename(columns={"longi": "lon"})
     df = df[expected_columns]
 
-    insert_sql = f"""
-    INSERT INTO `{config.TABLE_NAME}`
-    (city_name, `timestamp`, temp_celsius, temp_f, windspeed, data_collected_at, country, admin1, lat, longi)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    upsert_location_sql = f"""
+    INSERT INTO `{config.LOCATION_TABLE}` (city_name, country, admin1, lat, lon)
+    VALUES (%s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+        country = VALUES(country),
+        admin1 = VALUES(admin1),
+        location_id = LAST_INSERT_ID(location_id)
+    """
+
+    upsert_weather_sql = f"""
+    INSERT INTO `{config.WEATHER_TABLE}`
+    (location_id, `timestamp`, temp_celsius, temp_f, windspeed, data_collected_at)
+    VALUES (%s, %s, %s, %s, %s, %s)
     ON DUPLICATE KEY UPDATE
         temp_celsius = VALUES(temp_celsius),
         temp_f = VALUES(temp_f),
         windspeed = VALUES(windspeed),
-        data_collected_at = VALUES(data_collected_at),
-        country = VALUES(country),
-        admin1 = VALUES(admin1),
-        lat = VALUES(lat),
-        longi = VALUES(longi)
+        data_collected_at = VALUES(data_collected_at)
     """
 
     records = []
@@ -135,7 +176,35 @@ def load_weather_data(df) -> int:
     try:
         conn = _connect(with_database=True)
         cursor: MySQLCursor = conn.cursor()
-        cursor.executemany(insert_sql, records)
+        weather_records = []
+        for row in records:
+            (
+                city_name,
+                country,
+                admin1,
+                lat,
+                lon,
+                timestamp,
+                temp_celsius,
+                temp_f,
+                windspeed,
+                data_collected_at,
+            ) = row
+
+            cursor.execute(upsert_location_sql, (city_name, country, admin1, lat, lon))
+            location_id = cursor.lastrowid
+            weather_records.append(
+                (
+                    location_id,
+                    timestamp,
+                    temp_celsius,
+                    temp_f,
+                    windspeed,
+                    data_collected_at,
+                )
+            )
+
+        cursor.executemany(upsert_weather_sql, weather_records)
         conn.commit()
         rowcount = cursor.rowcount
         cursor.close()
